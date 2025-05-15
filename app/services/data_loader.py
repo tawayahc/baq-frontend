@@ -8,7 +8,7 @@ class DataLoader:
         self.file_path = os.path.join(CURRENT_DIR, '../../data/mockup_data.csv')
         self.data = self.load_data(-1)
 
-    def load_data(self, last_index:int):
+    def load_data(self, last_index: int):
         try:
             self.data = pd.read_csv(self.file_path)
             if last_index > 0:

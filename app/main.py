@@ -2,8 +2,7 @@ import pandas as pd
 import streamlit as st
 from components.sidebar import render_sidebar
 from services.data_loader import DataLoader
-
-data_loader = DataLoader()
+from utils.plot import plot_selected_columns
 
 st.set_page_config(
     page_title="baq dashborad",
@@ -11,7 +10,12 @@ st.set_page_config(
     layout="wide"
 )
 
-@st.fragment(run_every=5)
+
+RUNNING_RATE = 20
+data_loader = DataLoader()
+
+
+@st.fragment(run_every=RUNNING_RATE)
 def fetch_new_data():
     new_index = len(st.session_state['mockup_data'])
     new_row = data_loader.get_data(new_index)
@@ -20,23 +24,25 @@ def fetch_new_data():
         ignore_index=True
     )
 
-@st.fragment(run_every=5)
+@st.fragment(run_every=RUNNING_RATE)
 def display_data():
+    st.subheader("Historical Data Table")
     st.dataframe(st.session_state['mockup_data'], use_container_width=True)
+
+    st.subheader("Historical Data Chart")
+    plot_selected_columns(st.session_state['mockup_data'])
+
 
 def main():
     st.session_state['mockup_data'] = data_loader.load_data(24)
     st.title("Bangkok Air Quality Dashboard")
     render_sidebar()
 
-    home_tab, dashboard_tab, data_tab = st.tabs(["Home", "Dashboard", "Historical Data"])
+    home_tab, forecast_tab, dashboard_tab, data_tab = st.tabs(["Home", "PM2.5 Prediction", "Dashboard", "Historical Data"])
     with home_tab:
         st.header("Welcome to the Bangkok Air Quality Dashboard")
-        st.write("This dashboard provides real-time air quality data for Bangkok.")
-        st.write("Use the sidebar to view the next 1 hour PM2.5 forecast.")
     with data_tab:
         st.header("Historical Data")
-        st.write("This is where the historical data will be displayed.")
         fetch_new_data()
         display_data()
 
