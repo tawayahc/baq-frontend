@@ -1,33 +1,76 @@
 import os
+import boto3
 import pandas as pd
+from io import StringIO
+from botocore.exceptions import ClientError
 
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+class S3DataLoader:
+    """
+    OOP wrapper for loading and cleaning CSV data from S3,
+    with credentials & config pulled from a .env file.
+    """
 
-class DataLoader:
     def __init__(self):
-        self.file_path = os.path.join(CURRENT_DIR, '../../data/mockup_data.csv')
-        self.data = self.load_data(-1)
+        # Read config from environment
+        self.bucket = os.getenv("AWS_S3_BUCKET")
+        aws_key = os.getenv("AWS_ACCESS_KEY_ID")
+        aws_secret = os.getenv("AWS_SECRET_ACCESS_KEY")
+        aws_region = os.getenv("AWS_REGION")
 
-    def load_data(self, last_index: int):
+        if not self.bucket or not aws_key or not aws_secret:
+            raise ValueError(
+                "Missing one of AWS_S3_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY in environment"
+            )
+
+        # Initialize boto3 session & client
+        session = boto3.Session(
+            aws_access_key_id=aws_key,
+            aws_secret_access_key=aws_secret,
+            region_name=aws_region
+        )
+        self.s3 = session.client("s3")
+
+    def load_csv(self, key: str, encoding: str = "utf-8") -> pd.DataFrame:
+        """
+        Download a CSV from S3 and return as DataFrame.
+        """
         try:
-            self.data = pd.read_csv(self.file_path)
-            if last_index > 0:
-                return self.data.iloc[:last_index]
-            if last_index == -1:
-                return self.data
-        except FileNotFoundError:
-            print(f"File not found: {self.file_path}")
-            return None
-        except pd.errors.EmptyDataError:
-            print("No data found in the file.")
-            return None
-        except Exception as e:
-            print(f"An error occurred while loading data: {e}")
-            return None
-
-    def get_data(self, index: int):
-        if self.data is not None and index < len(self.data):
-            return self.data.iloc[[index]]
-        else:
-            print("Data not loaded or index out of range.")
+            resp = self.s3.get_object(Bucket=self.bucket, Key=key)
+            body = resp["Body"].read().decode(encoding)
+            return pd.read_csv(StringIO(body))
+        except ClientError as e:
+            print(f"[Error] Failed to fetch {key} from {self.bucket}: {e}")
             return pd.DataFrame()
+
+    def _clean_data(self, data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Clean DataFrame columns and drop unwanted fields.
+        """
+        if data is None or data.empty:
+            print("[Warning] No data to clean.")
+            return pd.DataFrame()
+
+        # Normalize column names
+        data.columns = (
+            data.columns
+                .str.replace(r'\s*\(\)', '', regex=True)
+                .str.replace(' ', '_', regex=False)
+        )
+
+        # Parse time column
+        if 'time' in data.columns:
+            data['time'] = pd.to_datetime(data['time'], errors='coerce')
+
+        # Drop extra columns
+        to_drop = [
+            "carbon_dioxide_(ppm)",
+            "methane_(μg/m³)",
+            "snowfall_(cm)",
+            "snow_depth_(m)"
+        ]
+        data = data.drop(columns=[c for c in to_drop if c in data.columns], errors='ignore')
+        return data
+
+    def get_data(self, key: str) -> pd.DataFrame:
+        df = self.load_csv(key)
+        return self._clean_data(df)

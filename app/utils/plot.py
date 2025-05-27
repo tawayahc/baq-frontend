@@ -7,8 +7,6 @@ def plot_selected_columns(df: pd.DataFrame):
         st.error("❌ DataFrame must contain a 'time' column.")
         return
 
-    df['time'] = pd.to_datetime(df['time'])
-
     end_time = df['time'].max()
     start_time = end_time - pd.Timedelta(days=1)
 
