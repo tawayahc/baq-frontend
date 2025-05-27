@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
@@ -9,7 +10,7 @@ from services.api_client import APIClient
 
 from components.sidebar import render_sidebar
 
-from utils.plot import plot_selected_columns
+from utils.plot import plot_selected_columns, plot_prediction
 
 
 st.set_page_config(
@@ -27,15 +28,92 @@ api_client = APIClient()
 
 @st.fragment(run_every=RUNNING_RATE)
 def fetch_new_data():
-    timelabel = datetime.today() - relativedelta(days=1)
+    timelabel = datetime.today() - relativedelta(days=2)
     timelabel = timelabel.strftime('%Y_%m_%d')
     raw_data_source = f'webapp-storage/data/raw/raw_data_{timelabel}.csv'
-    st.session_state['mockup_data'] = loader.get_data(raw_data_source)
+    df = loader.load_csv(raw_data_source)
+    if not df.empty:
+        st.session_state['data'] = df
+
+@st.fragment(run_every=RUNNING_RATE)
+def display_prediction():
+    current_time = st.session_state['data']['time'].max() if 'data' in st.session_state and 'time' in st.session_state['data'].columns else None
+    current_value = st.session_state['data']['pm2_5 (μg/m³)'].iloc[-1] if 'data' in st.session_state and 'pm2_5 (μg/m³)' in st.session_state['data'].columns else None
+
+    ss_res = api_client.single_step()
+    single_step_pred = (ss_res.get("predictions") or [None])[0]
+    st.session_state['single_pred'] = pd.concat(
+        [
+            st.session_state['single_pred'],
+            pd.DataFrame({
+                "time": [pd.to_datetime(current_time) + pd.Timedelta(hours=1)],
+                "pm2_5 (μg/m³)": [single_step_pred]
+            })
+        ],
+        ignore_index=True
+    )
+
+    ms_res = api_client.multi_step()
+    multi_step_pred = [
+        pred.get("predicted_value")
+        for pred in ms_res.get("predictions", [])
+    ]
+    multi_timestamps = []
+    for index in range(len(multi_step_pred)):
+        multi_timestamps.append(pd.to_datetime(current_time) + pd.Timedelta(hours=index + 1))
+    new_multi_pred = pd.DataFrame({
+        "time": multi_timestamps,
+        "pm2_5 (μg/m³)": multi_step_pred
+    })
+    if not st.session_state['multi_pred'].empty:
+        st.session_state['multi_pred'] = pd.concat(
+            [st.session_state['multi_pred'], new_multi_pred],
+            ignore_index=True
+        )
+    else:
+        st.session_state['multi_pred'] = new_multi_pred
+
+    plot_prediction(
+        df_list=[
+            st.session_state['data'],
+            st.session_state['multi_pred'],
+            st.session_state['single_pred'],
+        ],
+        x_list=['time', 'time', 'time'],
+        y_list=['pm2_5 (μg/m³)', 'pm2_5 (μg/m³)', 'pm2_5 (μg/m³)'],
+        start_time=pd.to_datetime(current_time) - pd.Timedelta(hours=12),
+        end_time=pd.to_datetime(current_time) + pd.Timedelta(hours=12)
+    )
+    
+    col1, col2, col3 = st.columns([1, 1, 1], border=True)
+    with col1:
+        st.metric(
+            label="Current Value:",
+            value=f"{current_value:.2f}%",
+            delta=f"updated on {current_time}",
+            delta_color="off"
+        )
+    with col2:
+        st.metric(
+            label="Next 1 Hour:",
+            value=f"{single_step_pred:.2f}%",
+            delta=f"{(single_step_pred - current_value):.2f}%" if not np.isnan(single_step_pred) else "N/A",
+            delta_color="inverse"
+        )
+    with col3:
+        if not new_multi_pred.empty:
+            st.metric(
+                label="Next 48 Hours:",
+                value=f"{new_multi_pred['pm2_5 (μg/m³)'].iloc[-1]:.2f}%",
+                delta=f"{(new_multi_pred['pm2_5 (μg/m³)'].iloc[-1] - current_value):.2f}%",
+                delta_color="inverse"
+            )
+    
 
 @st.fragment(run_every=RUNNING_RATE)
 def display_data():
     st.subheader("Historical Data Table")
-    df = st.session_state['mockup_data']
+    df = st.session_state['data']
     if df is None or df.empty:
         st.warning("No data available for the selected date.")
         return
@@ -58,16 +136,11 @@ def main():
 
     with forecast_tab:
         st.header("PM2.5 Prediction")
-        ss_res = api_client.single_step()
-        single_step_pred = (ss_res.get("predictions") or [None])[0]
 
-        ms_res = api_client.multi_step()
-        multi_step_pred = [
-            pred.get("predicted_value")
-            for pred in ms_res.get("predictions", [])
-        ]
-        st.write("Single Step Prediction:", single_step_pred)
-        st.write("Multi Step Prediction:", multi_step_pred)
+        st.session_state['single_pred'] = st.session_state['data'][['time', 'pm2_5 (μg/m³)']].tail(1)
+        st.session_state['multi_pred'] = pd.DataFrame(columns=['time', 'pm2_5 (μg/m³)'])
+        
+        display_prediction()
 
     with dashboard_tab:
         st.header("Dashboard")
