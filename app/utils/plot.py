@@ -2,6 +2,7 @@ import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 
+
 def plot_selected_columns(
         df: pd.DataFrame
     ):
@@ -42,6 +43,7 @@ def plot_selected_columns(
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
 
 def plot_prediction(
         df_list: list[pd.DataFrame],

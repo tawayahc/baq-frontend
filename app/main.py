@@ -21,7 +21,7 @@ st.set_page_config(
 )
 
 
-RUNNING_RATE = 60
+RUNNING_RATE = 60 * 60
 load_dotenv()
 loader = S3DataLoader()
 api_client = APIClient()
@@ -42,7 +42,7 @@ def display_prediction():
     current_value = st.session_state['data']['pm2_5_(μg/m³)'].iloc[-1] if 'data' in st.session_state and 'pm2_5_(μg/m³)' in st.session_state['data'].columns else None
 
     ss_res = api_client.single_step()
-    single_step_pred = (ss_res.get("predictions") or [None])[0]
+    single_step_pred = (ss_res.get("predictions") or [None])[0].get("predicted_value")
     st.session_state['single_pred'] = pd.concat(
         [
             st.session_state['single_pred'],
@@ -52,12 +52,12 @@ def display_prediction():
             })
         ],
         ignore_index=True
-    )
+    ).tail(2)
 
     ms_res = api_client.multi_step()
     multi_step_pred = [
         pred.get("predicted_value")
-        for pred in ms_res.get("predictions", [])
+        for pred in ms_res.get("predictions") or [None]
     ]
     multi_timestamps = []
     for index in range(len(multi_step_pred)):
@@ -70,10 +70,14 @@ def display_prediction():
         st.session_state['multi_pred'] = pd.concat(
             [st.session_state['multi_pred'], new_multi_pred],
             ignore_index=True
-        )
+        ).tail(48)
     else:
         st.session_state['multi_pred'] = new_multi_pred
 
+    print(st.session_state['single_pred'])
+    print(ms_res)
+    print("="*10)
+    print(multi_step_pred)
     plot_prediction(
         df_list=[
             st.session_state['data'],
@@ -144,7 +148,7 @@ def main():
         st.header("Welcome to the Bangkok Air Quality Dashboard")
         st.header("🏙️ Bangkok Air Quality Dashboard")
 
-        # 1. About
+        # About
         st.markdown("""
         **Bangkok Air Quality Dashboard** is a web application that brings together real-time weather and air quality data (PM2.5, PM10, pollutants, UV index, etc.) for Bangkok. Through this app you can:
         - View historical trends and detailed statistics  
@@ -154,7 +158,7 @@ def main():
 
         st.markdown("---")
 
-        # 2. Features
+        # Features
         st.subheader("🔎 Features")
         st.markdown("""
         - **PM2.5 Prediction**: Forecast next 1–48 hours of PM2.5  
@@ -164,7 +168,7 @@ def main():
 
         st.markdown("---")
 
-        # 3. How to Use
+        # How to Use
         st.subheader("📋 How to Use")
         st.markdown("""
         1. Select one of the tabs above to access each feature.  
@@ -175,7 +179,7 @@ def main():
 
         st.markdown("---")
 
-        # 4. Latest Update
+        # Latest Update
         last_update = None
         if 'data' in st.session_state and not st.session_state['data'].empty:
             last_update = st.session_state['data']['time'].max()
