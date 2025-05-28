@@ -1,6 +1,6 @@
-import os
 import boto3
 import pandas as pd
+import streamlit as st
 from io import StringIO
 from botocore.exceptions import ClientError
 
@@ -12,10 +12,10 @@ class S3DataLoader:
 
     def __init__(self):
         # Read config from environment
-        self.bucket = os.getenv("AWS_S3_BUCKET")
-        aws_key = os.getenv("AWS_ACCESS_KEY_ID")
-        aws_secret = os.getenv("AWS_SECRET_ACCESS_KEY")
-        aws_region = os.getenv("AWS_REGION")
+        self.bucket = st.secrets["AWS_S3_BUCKET"]
+        aws_key = st.secrets["AWS_ACCESS_KEY_ID"]
+        aws_secret = st.secrets["AWS_SECRET_ACCESS_KEY"]
+        aws_region = st.secrets["AWS_REGION"]
 
         if not self.bucket or not aws_key or not aws_secret:
             raise ValueError(

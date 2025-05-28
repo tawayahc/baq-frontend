@@ -1,5 +1,5 @@
-import os
 import requests
+import streamlit as st
 from typing import Optional, Dict, Any
 
 class APIClient:
@@ -7,8 +7,8 @@ class APIClient:
                  base_url: Optional[str] = None,
                  token: Optional[str] = None,
                  timeout: int = 10):
-        self.base_url = base_url or os.getenv("API_BASE_URL", "").rstrip("/")
-        self.token = token or os.getenv("API_TOKEN", "")
+        self.base_url = base_url or st.secrets["API_BASE_URL"].rstrip("/")
+        self.token = token or st.secrets.get("API_TOKEN", "")
         self.timeout = timeout
 
     def _headers(self) -> Dict[str, str]:
