@@ -44,7 +44,7 @@ BAQ-FRONTEND/
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/your-username/baq-frontend.git
+git clone https://github.com/tawayahc/baq-frontend.git
 cd baq-frontend
 ```
 
