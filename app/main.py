@@ -29,7 +29,7 @@ api_client = APIClient()
 
 @st.fragment(run_every=RUNNING_RATE)
 def fetch_new_data():
-    timelabel = datetime.today() - relativedelta(days=2)
+    timelabel = datetime.today() - relativedelta(days=1)
     timelabel = timelabel.strftime('%Y_%m_%d')
     raw_data_source = f'webapp-storage/data/raw/raw_data_{timelabel}.csv'
     df = loader.get_data(raw_data_source)
